@@ -186,6 +186,8 @@ const footprint = exports._footprint = (config, name, points, point, net_indexer
     // footprint positioning
     parsed_params.at = `(at ${anchor.x} ${-anchor.y} ${anchor.r})`
     parsed_params.rot = anchor.r
+    parsed_params.x = anchor.x
+    parsed_params.y = -anchor.y
     parsed_params.xy = (x, y) => {
         const new_anchor = anchor_lib.parse({
             shift: [x, -y]
