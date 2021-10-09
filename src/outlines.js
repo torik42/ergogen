@@ -226,6 +226,9 @@ exports.parse = (config = {}, points = {}, units = {}) => {
         if (a.type(parts)() == 'array') {
             parts = {...parts}
         }
+        
+        let arg_coord
+        
         parts = a.sane(parts, `outlines.exports.${key}`, 'object')()
         let result = {models: {}}
         for (let [part_name, part] of Object.entries(parts)) {
@@ -234,7 +237,7 @@ exports.parse = (config = {}, points = {}, units = {}) => {
                 part = o.operation(part, {outline: Object.keys(outlines)})
             }
             const expected = ['type', 'operation']
-            part.type = a.in(part.type || 'outline', `${name}.type`, ['keys', 'rectangle', 'circle', 'polygon', 'outline'])
+            part.type = a.in(part.type || 'outline', `${name}.type`, ['keys', 'rectangle', 'circle', 'polygon', 'outline', 'coord'])
             part.operation = a.in(part.operation || 'add', `${name}.operation`, ['add', 'subtract', 'intersect', 'stack'])
 
             let op = u.union
@@ -286,6 +289,80 @@ exports.parse = (config = {}, points = {}, units = {}) => {
                         arg = u.union(arg, u.circle(anchor.p, radius))
                     }
                     break
+                case 'coord':
+                    // use an op that does not change the current result
+                    // we add all coords at the end, such that they do not get simplified
+                    op = (a, b) => {return a}
+                    
+                    // we allow all keys used in other parts (e.g. circles, rectangles)
+                    // such that one can easily debug the anchor of these outlines
+                    a.unexpected(part, name, expected.concat(['anchor','mirror', 'size',  'corner', 'bevel', 'radius']))
+                    const coord_mirror = a.sane(part.mirror || false, `${name}.mirror`, 'boolean')()
+                    
+                    // make a list with all intermediate steps
+                    let anchor_def_list = []
+                    let count
+                    if (a.type(anchor_def)() == 'array') {
+                        for (let i = 0; i < anchor_def.length; i++) {
+                          // do not use anchors with 'hide=true'
+                          if (anchor_def[i].hide) {
+                            delete anchor_def[i].hide
+                          } else {
+                            anchor_def_list.push(anchor_def.slice(0, i+1))
+                          }
+                        } 
+                        count = anchor_def_list.length
+                    } else {
+                      anchor_def_list.push(anchor_def)
+                      count = 1
+                    }
+                    
+                    const line_points = []
+                    const mirror_line_points = []
+                    
+                    const coords = []
+                    const mirror_coords = []
+                    
+                    for (const [index, coord_anchor] of anchor_def_list.entries()) {
+                      anchor = anchor_lib.parse(coord_anchor, `${name}.anchor`, points)(units)
+                      
+                      const coord =  u.coord(l=3*(index+1)/count)
+                      // const coord =  u.coord(l=2)
+                      
+                      coords.push(anchor.position(u.deepcopy(coord)))
+                      line_points.push(anchor.p)
+                      
+                      if (coord_mirror) {
+                        const mirror_anchor = u.deepcopy(coord_anchor)
+                        const fieldName = Array.isArray(mirror_anchor) ? `${name}.anchor.0.ref` : `${name}.anchor.ref`;
+                        a.assert(
+                          mirror_anchor.ref || (Array.isArray(mirror_anchor) && mirror_anchor[0].ref),
+                          `Field "${fieldName}" must be specified if mirroring is required!`
+                        )
+                        anchor = anchor_lib.parse(mirror_anchor, `${name}.anchor --> mirror`, points, undefined, undefined, true)(units)
+                        
+                        mirror_coords.push(anchor.position(m.model.mirror(u.deepcopy(coord), true, false)))
+                        
+                        mirror_line_points.push(anchor.p)
+                      }
+                    }
+                    
+                    // extra line connecting all intermediate steps
+                    let anchor_line = u.poly_line(line_points)
+                    anchor_line.layer = "blue"
+                    
+                    // add line and coords to arg
+                    arg_coord = u.stack(arg_coord, anchor_line)
+                    arg_coord = u.stack(arg_coord, u.stack_array(coords))
+                    
+                    // same for the mirror
+                    if (coord_mirror) {
+                      anchor_line = u.poly_line(mirror_line_points)
+                      anchor_line.layer = "blue"
+                      arg_coord = u.stack(arg_coord, anchor_line)
+                      arg_coord = u.stack(arg_coord, u.stack_array(mirror_coords))
+                    }
+                    break
                 case 'polygon':
                     a.unexpected(part, name, expected.concat(['points', 'mirror']))
                     const poly_points = a.sane(part.points, `${name}.points`, 'array')()
@@ -331,6 +408,7 @@ exports.parse = (config = {}, points = {}, units = {}) => {
 
         m.model.originate(result)
         m.model.simplify(result)
+        result = u.stack(result, arg_coord)
         outlines[key] = result
     }
 

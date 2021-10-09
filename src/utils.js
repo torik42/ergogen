@@ -1,6 +1,6 @@
 const m = require('makerjs')
 
-exports.deepcopy = value => {
+const deepcopy = exports.deepcopy = value => {
     if (value === undefined) return undefined
     return JSON.parse(JSON.stringify(value))
 }
@@ -54,6 +54,37 @@ exports.poly = (arr) => {
     return res
 }
 
+exports.poly_line = (arr) => {
+    let counter = 0
+    let prev = arr[0]
+    const res = {
+        paths: {}
+    }
+    for (const p of arr) {
+        if (eq(prev, p)) continue
+        res.paths['p' + (++counter)] = line(prev, p)
+        prev = p
+    }
+    return res
+}
+
+// A coordinate system made from two little arrows.
+// l specifies the lenght of the arrows.
+exports.coord = (l=3) => {
+  const arrow_tip = {
+    tip1: line([.9*l,.1*l], [l,0]),
+    tip2: line([l,0], [.9*l,-.1*l])
+  }
+  const arrow_model = {paths: arrow_tip}
+  let x_tip = deepcopy(arrow_model)
+  let y_tip = m.model.rotate(arrow_model, 90, [0,0])
+  const x_line = {paths: {line: line([-l/5,0], [l,0])}}
+  const y_line = {paths: {line: line([0,0], [0,l])}}
+  let model = {models: {x_tip, y_tip, x_line, y_line}}
+  model.layer = "green"
+  return model
+}
+
 const farPoint = [1234.1234, 2143.56789]
 
 exports.union = (a, b) => {
@@ -80,4 +111,12 @@ exports.stack = (a, b) => {
             a, b
         }
     }
+}
+
+exports.stack_array = (arr) => {
+    const res = {models: {}}
+    for ([ind, elem] of arr.entries()) {
+      res.models["elem"+ind] = elem
+    }
+    return res
 }
