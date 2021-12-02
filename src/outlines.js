@@ -314,10 +314,27 @@ exports.parse = (config = {}, points = {}, units = {}) => {
                     }
                     break
                 case 'outline':
-                    a.unexpected(part, name, expected.concat(['name', 'fillet']))
+                    a.unexpected(part, name, expected.concat(['name', 'fillet', 'contour']))
                     a.assert(outlines[part.name], `Field "${name}.name" does not name an existing outline!`)
-                    const fillet = a.sane(part.fillet || 0, `${name}.fillet`, 'number')(units)
                     arg = u.deepcopy(outlines[part.name])
+                    
+                    // apply contour
+                    const contour = a.sane(part.contour || {}, `${name}.fillet.contour`, 'object')(units)
+                    const PADDING_TYPES = ['rounded', 'pointed', 'beveled']
+                    a.unexpected(contour, `${name}.contour`, expected.concat(['amount', 'type']))
+                    var contour_amount = a.sane(contour.amount || 0, `${name}.contour.amount`, 'number')(units)
+                    const contour_corners = PADDING_TYPES.indexOf(a.in(contour.type || 'pointed', `${name}.contour.type`, PADDING_TYPES))
+                    var inside = false
+                    if (contour_amount < 0) {
+                      inside = true
+                      contour_amount = -contour_amount
+                    }
+                    if (contour_amount) {
+                      arg = m.model.outline(arg, contour_amount, contour_corners, inside)
+                    }
+                    
+                    // apply fillet
+                    const fillet = a.sane(part.fillet || 0, `${name}.fillet`, 'number')(units)
                     if (fillet) {
                         arg.models.fillets = m.chain.fillet(m.model.findSingleChain(arg), fillet)
                     }
