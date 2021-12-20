@@ -154,9 +154,10 @@ const footprint = exports._footprint = (config, name, points, point, net_indexer
     if (config === false) return ''
 
     // config sanitization
-    a.unexpected(config, name, ['type', 'anchor', 'nets', 'anchors', 'params', 'mirror_anchor'])
+    a.unexpected(config, name, ['type', 'anchor', 'nets', 'anchors', 'params', 'mirror_anchor', 'mirror_anchors'])
     const type = a.in(config.type, `${name}.type`, Object.keys(footprint_types))
     const mirror_anchor = a.sane(config.mirror_anchor || true, `${name}.mirror_anchor`, 'boolean')()
+    const mirror_anchors = a.sane(config.mirror_anchors || true, `${name}.mirror_anchors`, 'boolean')()
     let anchor = anchor_lib.parse(config.anchor || {}, `${name}.anchor`, points, true, point, mirror=(mirror_anchor && point && point.meta.mirrored))(units)
     const nets = a.sane(config.nets || {}, `${name}.nets`, 'object')()
     const anchors = a.sane(config.anchors || {}, `${name}.anchors`, 'object')()
@@ -225,7 +226,7 @@ const footprint = exports._footprint = (config, name, points, point, net_indexer
     // parsing anchor-type parameters
     parsed_params.anchors = {}
     for (const [anchor_name, anchor_config] of Object.entries(prep.extend(fp.anchors || {}, anchors))) {
-        let parsed_anchor = anchor_lib.parse(anchor_config || {}, `${name}.anchors.${anchor_name}`, points, true, anchor)(units)
+        let parsed_anchor = anchor_lib.parse(anchor_config || {}, `${name}.anchors.${anchor_name}`, points, true, anchor, mirror=(mirror_anchors && point && point.meta.mirrored))(units)
         parsed_anchor.y = -parsed_anchor.y
         parsed_params.anchors[anchor_name] = parsed_anchor
     }
